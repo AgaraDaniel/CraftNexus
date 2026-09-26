@@ -174,6 +174,13 @@ const OBSERVABILITY_METRICS_VERSION: u32 = 1;
 /// Cap decay intervals applied in one call to bound CPU (≈ 64 periods).
 const MAX_DECAY_INTERVALS_PER_CALL: u64 = 64;
 
+/// Default archival retention period: 30 days in ledgers (~5s ledger).
+const DEFAULT_ARCHIVAL_RETENTION_LEDGERS: u32 = 518_400;
+/// Default maximum archival records per user.
+const DEFAULT_MAX_ARCHIVAL_RECORDS: u32 = 10_000;
+/// Default compaction batch size for bounded, resumable pruning.
+const DEFAULT_ARCHIVAL_COMPACTION_BATCH: u32 = 100;
+
 /// Immutable snapshot of user/global state at settlement decision time.
 #[contracttype]
 #[derive(Clone)]
@@ -261,6 +268,23 @@ pub mod decimal_test_token;
 #[cfg(test)]
 #[path = "onboarding_test.rs"]
 mod onboarding_test;
+
+/// Archival record policy for immutable summaries.
+///
+/// Separates active indexes from archival summaries. Archival records are
+/// immutable and retained for fund reconstruction; active records are never
+/// pruned by historical maintenance. Compaction is bounded and resumable via
+/// per-user offset state.
+#[contracttype]
+#[derive(Clone)]
+pub struct ArchivalPolicy {
+    /// Number of ledgers an archival record is retained before compaction.
+    pub retention_ledgers: u32,
+    /// Maximum archival records kept per user (oldest compacted first).
+    pub max_records_per_user: u32,
+    /// Number of records processed per resumable compaction batch.
+    pub compaction_batch_size: u32,
+}
 
 /// Storage keys for the onboarding contract.
 ///
@@ -353,6 +377,12 @@ pub enum DataKey {
     SettlementSnapshotCounter,
     /// Proof-of-Humanity credential record keyed by user address (#940)
     UserPohCredential(Address),
+    /// Global archival policy for immutable summaries (retention & migration rules).
+    ArchivalPolicy,
+    /// Immutable archival summary keyed by user address and sequence number.
+    ArchivalRecord(Address, u64),
+    /// Per-user resumable compaction offset for archival records.
+    ArchivalCompactionOffset(Address),
     /// Secondary index mapping proof-of-humanity credential hash to owner address (#940)
     PohCredentialHash(Bytes),
     /// Secondary index mapping correlated identity hash to owner address (#940)
